@@ -1,14 +1,18 @@
 const { ApiPromise, WsProvider } = require('@polkadot/api');
 const { Keyring } = require('@polkadot/keyring');
 const { cryptoWaitReady } = require('@polkadot/util-crypto');
-
-const MNUEMONIC = 'shift sniff visual already minimum love vital pave rose twice lady witness';
+const { stringToU8a, u8aToHex } = require('@polkadot/util');
 
 const main = async () => {
     await cryptoWaitReady();
 
     const keyring = new Keyring({ type: 'sr25519', ss58Format: 42 });
-    const keypair = keyring.createFromUri(MNUEMONIC);
+    const keypair = keyring.createFromUri(MNUEMONIC, {}, 'sr25519');
+    // console.log('Address: ', keypair.address);
+    // const msg = stringToU8a('this is a message');
+    // const s = keypair.sign(msg);
+    // const valid = keypair.verify(msg, s, keypair.publicKey)
+    // console.log('VALID: ', valid)
 
     const api = await ApiPromise.create({
         provider: new WsProvider('wss://westend-rpc.polkadot.io')
@@ -18,12 +22,12 @@ const main = async () => {
     const blockHash = await api.rpc.chain.getBlockHash();
     const genesisHash = await api.genesisHash;
     const { specVersion, transactionVersion } = await api.rpc.state.getRuntimeVersion();
-    const nonce = await api.rpc.system.accountNextIndex('6u6j2CjsymP9vkUu246i4ZEj1FMAA9F92TyUqZx8BVs7V3z');
+    const nonce = await api.rpc.system.accountNextIndex('5CB9KhQGdudBZLLW2r85C1TfDu7QQfxasbBMhrwJ7EsreTGK');
 
     const transactionPayload = {
         specVersion: specVersion.toHex(),
         transactionVersion: transactionVersion.toHex(),
-        address: `6u6j2CjsymP9vkUu246i4ZEj1FMAA9F92TyUqZx8BVs7V3z`,
+        address: `5CB9KhQGdudBZLLW2r85C1TfDu7QQfxasbBMhrwJ7EsreTGK`,
         blockHash: blockHash.hash.toHex(),
         blockNumber: block.block.header.number.toHex(),
         era: '0x3501',
@@ -48,6 +52,7 @@ const main = async () => {
         version: transactionPayload.version
     });
 
+    const sig = keypair.sign(signingPayload);
     const { signature } = signingPayload.sign(keypair);
 
     const extrinsic = api.registry.createType(
@@ -56,11 +61,15 @@ const main = async () => {
         { version: transactionPayload.version }
     );
 
-    extrinsic.addSignature(transactionPayload.address, signature, transactionPayload)
+    extrinsic.addSignature(transactionPayload.address, u8aToHex(sig), transactionPayload)
 
-    const h = await api.rpc.author.submitExtrinsic(extrinsic.toHex());
+    const isValid = keypair.verify(extrinsic, sig, keypair.publicKey);
 
-    console.log(h);
+    console.log(isValid);
+
+    // const h = await api.rpc.author.submitExtrinsic(extrinsic.toHex());
+
+    // console.log(h);
 }
 
 main().catch(err => console.error(err));
